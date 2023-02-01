@@ -1,0 +1,56 @@
+---
+- name: Install packages
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: latest
+  loop:
+    - oracle-epel-release-el8
+    - openvpn
+    - rsync
+    - sshpass
+
+- name: Create new clients .ovpn file
+  ansible.builtin.command:
+    cmd: "./centos-8-vpn.sh"
+    creates: "{{ inventory_hostname }}.ovpn"
+  loop: "{{ groups.clients }}"
+  delegate_to: "{{ groups.server[0] }}"
+  environment:
+    MENU_OPTION: 1
+    CLIENT: "{{ inventory_hostname }}"
+    PASS: 1
+
+- name: Download .ovpn files from server to control host
+  ansible.builtin.fetch:
+    src: "{{ inventory_hostname }}.ovpn"
+    dest: "ovpns"
+  delegate_to: "{{ groups.server[0] }}"
+  loop: "{{ groups.clients }}"
+
+- name: Download .ovpn files from control host to clients
+  synchronize:
+    src: "ovpns/{{ inventory_hostname }}/{{ inventory_hostname }}.ovpn"
+    dest: "/etc/openvpn/client/client.conf"
+  delegate_to: localhost
+
+- name: Clear local files
+  ansible.builtin.file:
+    path: ovpns
+    state: absent
+  delegate_to: localhost
+
+- name: Start and enable OpenVPN service on clients
+  ansible.builtin.service:
+    name: openvpn-client@client
+    state: started
+    enabled: yes
+
+- name: Get vpn tunnel ip
+  ansible.builtin.shell: ip -4 a | grep 'inet 10'
+  register: tun_ip
+
+- ansible.builtin.debug:
+    msg: "{{ tun_ip.stdout }}"
+
+
+    

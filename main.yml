@@ -1,0 +1,6 @@
+---
+- name: Install OpenVPN client on host
+  hosts: clients
+  gather_facts: no
+  roles:
+    - role: openvpn_client
